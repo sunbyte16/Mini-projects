@@ -1,0 +1,79 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Hand Detection Test</title>
+    <style>
+        body { 
+            background: #333; 
+            color: white; 
+            font-family: Arial; 
+            text-align: center; 
+            padding: 20px;
+        }
+        #video { 
+            width: 640px; 
+            height: 480px; 
+            border: 2px solid #00ff00; 
+            margin: 20px;
+        }
+        #status { 
+            font-size: 18px; 
+            margin: 10px;
+        }
+        button { 
+            padding: 10px 20px; 
+            font-size: 16px; 
+            margin: 10px;
+            background: #00ff00;
+            color: black;
+            border: none;
+            border-radius: 5px;
+        }
+    </style>
+</head>
+<body>
+    <h1>🤖 Hand Detection Test</h1>
+    <video id="video" autoplay muted></video>
+    <div id="status">Click "Start Camera" to begin</div>
+    <button onclick="startCamera()">Start Camera</button>
+    <button onclick="startDetection()">Start Detection</button>
+    <button onclick="testAPI()">Test API</button>
+
+    <script>
+        const video = document.getElementById('video');
+        const status = document.getElementById('status');
+
+        async function startCamera() {
+            try {
+                const stream = await navigator.mediaDevices.getUserMedia({ 
+                    video: { width: 640, height: 480 } 
+                });
+                video.srcObject = stream;
+                status.textContent = 'Camera started! Now click "Start Detection"';
+            } catch (error) {
+                status.textContent = 'Camera error: ' + error.message;
+            }
+        }
+
+        async function startDetection() {
+            try {
+                const response = await fetch('/api/start', { method: 'POST' });
+                const data = await response.json();
+                status.textContent = data.message;
+            } catch (error) {
+                status.textContent = 'Detection error: ' + error.message;
+            }
+        }
+
+        async function testAPI() {
+            try {
+                const response = await fetch('/api/status');
+                const data = await response.json();
+                status.textContent = 'API Status: ' + JSON.stringify(data);
+            } catch (error) {
+                status.textContent = 'API error: ' + error.message;
+            }
+        }
+    </script>
+</body>
+</html>

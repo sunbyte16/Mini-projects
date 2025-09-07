@@ -1,0 +1,321 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>AI Hand Detection System</title>
+    <!-- MediaPipe scripts removed for Python 3.13 compatibility -->
+    <style>
+        body {
+            margin: 0;
+            padding: 20px;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            min-height: 100vh;
+        }
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+            text-align: center;
+        }
+        h1 {
+            color: white;
+            text-shadow: 2px 2px 4px rgba(0,0,0,0.3);
+            margin-bottom: 30px;
+        }
+        .video-container {
+            position: relative;
+            display: inline-block;
+            margin: 20px;
+            border-radius: 15px;
+            overflow: hidden;
+            box-shadow: 0 10px 30px rgba(0,0,0,0.3);
+        }
+        canvas {
+            position: absolute;
+            left: 0;
+            top: 0;
+            z-index: 2;
+        }
+        video {
+            background: #000;
+            border-radius: 15px;
+        }
+        #stats {
+            background: rgba(0, 0, 0, 0.8);
+            color: white;
+            padding: 15px;
+            border-radius: 10px;
+            position: absolute;
+            top: 15px;
+            left: 15px;
+            font-size: 14px;
+            z-index: 3;
+            backdrop-filter: blur(10px);
+        }
+        .controls {
+            margin-top: 20px;
+            color: white;
+        }
+        .controls h3 {
+            margin-bottom: 10px;
+        }
+        .control-item {
+            margin: 5px 0;
+            font-size: 14px;
+        }
+        .status {
+            margin-top: 20px;
+            padding: 10px;
+            border-radius: 5px;
+            color: white;
+        }
+        .status.connected {
+            background: rgba(0, 255, 0, 0.3);
+        }
+        .status.disconnected {
+            background: rgba(255, 0, 0, 0.3);
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>🤖 AI Hand Detection System</h1>
+        <div class="video-container">
+            <video id="video" width="640" height="480" autoplay muted style="display: none;"></video>
+            <canvas id="canvas" width="640" height="480"></canvas>
+            <div id="stats">
+                <div>👐 Hands detected: <span id="handCount">0</span></div>
+                <div>📊 FPS: <span id="fps">0</span></div>
+                <div>🎯 Gesture: <span id="gesture">None</span></div>
+            </div>
+        </div>
+        
+        <div class="controls">
+            <h3>Controls</h3>
+            <div class="control-item">• Press 'Q' to quit</div>
+            <div class="control-item">• Press 'S' to save screenshot</div>
+            <div class="control-item">• Press 'G' to toggle gesture detection</div>
+        </div>
+        
+        <div id="status" class="status disconnected">
+            Status: Initializing...
+        </div>
+    </div>
+
+    <script>
+        const videoElement = document.getElementById('video');
+        const canvasElement = document.getElementById('canvas');
+        const canvasCtx = canvasElement.getContext('2d');
+        const handCountElement = document.getElementById('handCount');
+        const fpsElement = document.getElementById('fps');
+        const gestureElement = document.getElementById('gesture');
+        const statusElement = document.getElementById('status');
+        
+        let lastFrameTime = Date.now();
+        let fps = 0;
+        let gestureMode = true;
+        let isDetectionRunning = false;
+
+        function updateStatus(message, isConnected = false) {
+            statusElement.textContent = `Status: ${message}`;
+            statusElement.className = `status ${isConnected ? 'connected' : 'disconnected'}`;
+        }
+
+        // Start hand detection
+        async function startDetection() {
+            try {
+                const response = await fetch('/api/start', { method: 'POST' });
+                const data = await response.json();
+                if (data.success) {
+                    isDetectionRunning = true;
+                    updateStatus('Hand detection started', true);
+                    startFrameUpdate();
+                } else {
+                    updateStatus(`Error: ${data.message}`, false);
+                }
+            } catch (error) {
+                updateStatus(`Error: ${error.message}`, false);
+            }
+        }
+
+        // Stop hand detection
+        async function stopDetection() {
+            try {
+                const response = await fetch('/api/stop', { method: 'POST' });
+                const data = await response.json();
+                if (data.success) {
+                    isDetectionRunning = false;
+                    updateStatus('Hand detection stopped', false);
+                }
+            } catch (error) {
+                updateStatus(`Error: ${error.message}`, false);
+            }
+        }
+
+        // Update frame from server
+        async function updateFrame() {
+            if (!isDetectionRunning) return;
+            
+            try {
+                const response = await fetch('/api/frame');
+                const data = await response.json();
+                
+                if (data.success && data.frame) {
+                    // Create image from base64 data
+                    const img = new Image();
+                    img.onload = function() {
+                        // Clear canvas
+                        canvasCtx.clearRect(0, 0, canvasElement.width, canvasElement.height);
+                        
+                        // Draw video background first
+                        if (videoElement.videoWidth > 0) {
+                            canvasCtx.drawImage(videoElement, 0, 0, canvasElement.width, canvasElement.height);
+                        }
+                        
+                        // Draw detection overlay
+                        canvasCtx.drawImage(img, 0, 0, canvasElement.width, canvasElement.height);
+                        
+                        // Calculate FPS
+                        const now = Date.now();
+                        fps = Math.round(1000 / (now - lastFrameTime));
+                        lastFrameTime = now;
+                        fpsElement.textContent = fps;
+                    };
+                    img.src = 'data:image/jpeg;base64,' + data.frame;
+                }
+            } catch (error) {
+                console.error('Error updating frame:', error);
+            }
+        }
+
+        // Update status and landmarks
+        async function updateStatus() {
+            if (!isDetectionRunning) return;
+            
+            try {
+                const response = await fetch('/api/status');
+                const data = await response.json();
+                
+                if (data.success) {
+                    handCountElement.textContent = data.hand_count || 0;
+                    
+                    // Update gesture if enabled
+                    if (gestureMode) {
+                        const landmarksResponse = await fetch('/api/landmarks');
+                        const landmarksData = await landmarksResponse.json();
+                        if (landmarksData.success) {
+                            const fingerCount = landmarksData.hand_count || 0;
+                            gestureElement.textContent = `${fingerCount} fingers detected`;
+                        }
+                    }
+                }
+            } catch (error) {
+                console.error('Error updating status:', error);
+            }
+        }
+
+        // Start frame update loop
+        function startFrameUpdate() {
+            const updateLoop = () => {
+                if (isDetectionRunning) {
+                    updateFrame();
+                    updateStatus();
+                    requestAnimationFrame(updateLoop);
+                }
+            };
+            updateLoop();
+        }
+
+        // Initialize camera
+        async function initCamera() {
+            try {
+                const stream = await navigator.mediaDevices.getUserMedia({ 
+                    video: { 
+                        width: 640, 
+                        height: 480,
+                        facingMode: 'user'
+                    } 
+                });
+                videoElement.srcObject = stream;
+                
+                videoElement.onloadedmetadata = () => {
+                    updateStatus('Camera connected', true);
+                    drawVideoToCanvas();
+                    // Auto-start detection
+                    setTimeout(startDetection, 1000);
+                };
+                
+                videoElement.onerror = (error) => {
+                    updateStatus(`Camera error: ${error.message}`, false);
+                };
+                
+            } catch (error) {
+                updateStatus(`Camera access denied: ${error.message}`, false);
+                console.error('Camera error:', error);
+            }
+        }
+
+        // Draw video to canvas
+        function drawVideoToCanvas() {
+            if (videoElement.videoWidth > 0 && videoElement.videoHeight > 0) {
+                canvasCtx.drawImage(videoElement, 0, 0, canvasElement.width, canvasElement.height);
+            }
+            requestAnimationFrame(drawVideoToCanvas);
+        }
+
+        // Initialize on page load
+        document.addEventListener('DOMContentLoaded', () => {
+            // Check if camera is available
+            if (navigator.mediaDevices && navigator.mediaDevices.getUserMedia) {
+                initCamera();
+            } else {
+                updateStatus('Camera not supported in this browser', false);
+            }
+        });
+
+        // Add click to start camera
+        document.addEventListener('click', () => {
+            if (statusElement.textContent.includes('denied') || statusElement.textContent.includes('error')) {
+                initCamera();
+            }
+        });
+
+        // Handle keyboard events
+        document.addEventListener('keydown', (event) => {
+            switch(event.key.toLowerCase()) {
+                case 'q':
+                    updateStatus('Quitting...', false);
+                    stopDetection();
+                    setTimeout(() => {
+                        window.close();
+                    }, 1000);
+                    break;
+                case 'g':
+                    gestureMode = !gestureMode;
+                    gestureElement.textContent = gestureMode ? 'Enabled' : 'Disabled';
+                    break;
+                case 's':
+                    // Save screenshot functionality
+                    saveScreenshot();
+                    break;
+            }
+        });
+
+        // Save screenshot
+        async function saveScreenshot() {
+            try {
+                const response = await fetch('/api/screenshot', { method: 'POST' });
+                const data = await response.json();
+                if (data.success) {
+                    updateStatus(`Screenshot saved: ${data.filename}`, true);
+                } else {
+                    updateStatus(`Screenshot error: ${data.message}`, false);
+                }
+            } catch (error) {
+                updateStatus(`Screenshot error: ${error.message}`, false);
+            }
+        }
+    </script>
+</body>
+</html>
