@@ -1,0 +1,14 @@
+# Student Record Manager - Requirements
+# This project uses only Python standard library modules
+# No external dependencies required
+
+# Python version requirement
+# Python 3.6+ recommended for f-string support and type hints
+
+# Standard library modules used:
+# - csv: For CSV file handling
+# - json: For JSON file handling
+# - os: For file system operations
+# - sys: For system-specific parameters and functions
+# - typing: For type hints (Python 3.5+)
+# - datetime: For timestamp functionality (if needed)

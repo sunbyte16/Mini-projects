@@ -1,0 +1,14 @@
+# Library Management System Requirements
+# This project uses only Python standard library modules
+# No external dependencies required
+
+# Python version requirement
+# Python 3.7+ recommended for better type hints support
+
+# Standard library modules used:
+# - json (for data persistence)
+# - csv (for CSV export functionality - optional)
+# - os (for file operations)
+# - datetime (for date/time handling)
+# - typing (for type hints)
+# - sys (for system operations)
